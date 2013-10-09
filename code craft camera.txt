@@ -1,0 +1,149 @@
+/*
+	Soft quickly coded by s. in 2011.
+	
+        Used to take pictures in .jpg format then stock them on SD card.
+        Code created for the Coralie GOURGUECHON's project : craft-camera.com
+		
+	Librairies used : SdFat, NewSoftSerial and JPEGCamera
+	This soft is made for the Memoire shield from Snootlab.com
+
+        IDE ARduino v1.0.4
+	
+	Not really clean or well coded but hey, let's say it's a draft :)
+
+        License : GPLv2 
+*/
+
+
+#include <JPEGCamera.h>
+#include <SoftwareSerial.h>
+#include <Wire.h>
+#include <SD.h>
+//create camera object
+JPEGCamera camera;
+
+// create SD relatives
+
+File fichier;
+const char pin_chipSelect = 10;
+const char pin_inter = 4;
+const char pin_led = 6;
+int read_inter;
+//Array for the camera response
+char response[32];
+//Compte is response's size
+unsigned int compte = 0;
+//Size will be set to the size of the jpeg image.
+unsigned int taille = 0;
+//This will keep track of the data address being read from the camera
+unsigned int address = 0;
+//while reading the file data from the camera.
+//Files relatives variables
+int numero = 1;
+String extension = String (".jpg");
+char nom_fichier[13];
+String nom;
+String str_numero;
+
+
+void
+setup ()
+{
+
+  //Init camera
+  camera.begin ();
+
+  Serial.begin (9600);
+
+  pinMode (pin_chipSelect, OUTPUT);	
+  pinMode (pin_inter, INPUT);
+  pinMode (pin_led, OUTPUT);
+  digitalWrite (pin_led, LOW);
+  if (!SD.begin(pin_chipSelect)) 
+    {
+      Serial.println ("Carte fausse ou absente");
+      while (1);		// in case of SD problem, halt the run
+    }
+
+   str_numero = String (numero);
+   nom = str_numero + extension;
+  nom.toCharArray (nom_fichier, 13);
+  
+
+  compte = camera.reset (response);
+  delay (3000);
+}
+
+void
+loop ()
+{
+
+eof_flag=0;
+  while (read_inter == LOW)
+    {
+      read_inter = digitalRead (pin_inter);
+    }
+  Serial.println ("Activation du BP.");  
+  address = 0;
+  taille = 0;
+
+  //Reset the camera ?
+
+  //Take a picture
+  compte = camera.takePicture (response);
+
+  Serial.println ("\nPhoto prise.");
+
+  //Get the size of the picture
+  compte = camera.getSize (response, &taille);
+  Serial.print ("Taille: ");
+  Serial.println (taille);
+
+  while (SD.exists (nom_fichier))
+    {
+      numero++;
+      str_numero = String (numero);
+      nom = str_numero + extension;
+      nom.toCharArray (nom_fichier, 13);
+    }
+
+  fichier = SD.open (nom_fichier, O_WRITE | O_CREAT);
+
+  if (!fichier)
+    {
+      Serial.println ("Erreur d'ouverture du fichier ");
+      Serial.println (nom_fichier);
+      return;
+    }
+  digitalWrite (pin_led, HIGH);
+  //Starting at address 0
+  while (address < taille)
+    {
+      //Read the data starting at the current address.
+      compte = camera.readData (response, address);
+      //saving picture in SD
+          byte buf[32];
+          unsigned int buf_count;
+          
+          for(buf_count=0; buf_count < compte; buf_count++)
+            {
+             buf[buf_count]=response[buf_count]; 
+            }
+            
+	  fichier.write (buf,compte);
+
+         address += compte;
+	}
+  // close and flush
+  fichier.close ();
+
+  compte = camera.reset (response);
+  delay (3000);
+  digitalWrite (pin_led, LOW);
+  read_inter = LOW;
+  Serial.print ("Enregistrement effectif de : ");
+  Serial.println (nom_fichier);
+
+}
+
+
